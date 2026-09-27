@@ -159,7 +159,7 @@ async def upload_material(file: UploadFile = File(...), db: Session = Depends(ge
 
     upload_dir = Path(__file__).resolve().parents[2] / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
-    safe = "".join(c for c in Path(name).name if c.isalnum() or c in "._-").strip() or "file"
+    safe = "".join(c for c in Path(name).name if c.isalnum() or c in "._- ").strip() or "file"
     target = upload_dir / f"{aid}_{int(__import__('time').time() * 1000)}_{safe}"
 
     with target.open("wb") as out:
