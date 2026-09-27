@@ -32,10 +32,8 @@ def _safe_name(name: str) -> str:
     name = re.sub(r"[^\w\u4e00-\u9fa5-]", "_", name.strip())[:48] or "account"
     return name
 
-
 def profile_dir(account: Account) -> Path:
     return auth_root() / _safe_name(account.display_name or account.username or f"account_{account.id}")
-
 
 def staging_dir() -> Path:
     return auth_root() / f"_staging_{uuid.uuid4().hex[:10]}"
@@ -46,6 +44,7 @@ def staging_dir() -> Path:
 def _grab_identity(page) -> tuple[str, str, str]:
     """从创作者中心页面读回身份：昵称 / 抖音号 / uid（尽力而为）。"""
     nickname, douyin_id, uid = "", "", ""
+    # 路1：页面右上角昵称
     try:
         txt = page.locator("body").inner_text(timeout=3000)
         m = re.search(r"(@[\w.]+)", txt)
@@ -53,6 +52,7 @@ def _grab_identity(page) -> tuple[str, str, str]:
             douyin_id = m.group(1)
     except Exception:
         pass
+    # 路2：创作者中心接口数据
     try:
         data = page.evaluate(
             """() => {
@@ -72,7 +72,6 @@ def _grab_identity(page) -> tuple[str, str, str]:
         pass
     return nickname, douyin_id, uid
 
-
 def json_path(o, path: str):
     cur = o
     for k in path.split("."):
@@ -81,7 +80,6 @@ def json_path(o, path: str):
         else:
             return None
     return cur if isinstance(cur, (str, int, float)) else None
-
 
 def _wait_logged_in(page, timeout_s: int = 300) -> bool:
     """等待扫码登录完成：登录后创作者中心 URL 稳定且不再跳登录页。"""
@@ -98,7 +96,9 @@ def _wait_logged_in(page, timeout_s: int = 300) -> bool:
             stable = 0
         else:
             stable += 1
+        # 创作者中心且非 passport 登录路径
         if url.startswith("https://creator.douyin.com") and "/passport" not in url and stable >= 3:
+            # 进一步确认：出现创作者中心特征元素
             try:
                 page.wait_for_selector("text=/内容管理|作品管理|数据概览/", timeout=4000)
                 return True
@@ -106,7 +106,6 @@ def _wait_logged_in(page, timeout_s: int = 300) -> bool:
                 pass
         time.sleep(1)
     return False
-
 
 def bind_profile_sync(db_session, aid: int) -> dict:
     """绑新号（阻塞）：临时目录扫码 → 读身份 → 挪正式目录。"""
@@ -138,6 +137,7 @@ def bind_profile_sync(db_session, aid: int) -> dict:
             nickname, douyin_id, uid = _grab_identity(page)
             ctx.close()
 
+        # 挪正式目录（先清旧目录残留，再搬）
         if final.exists():
             shutil.rmtree(final, ignore_errors=True)
         shutil.move(str(staging), str(final))
@@ -154,11 +154,11 @@ def bind_profile_sync(db_session, aid: int) -> dict:
         result.update({"profile_path": account.profile_path, "nickname": nickname, "douyin_id": douyin_id})
         return result
     except Exception as e:
+        # fail-closed：丢弃临时目录，绝不挂旧号
         shutil.rmtree(staging, ignore_errors=True)
         account.profile_status = "failed"
         db_session.commit()
         raise
-
 
 def start_bind(db_session, aid: int) -> dict:
     """异步启动绑新号。"""
@@ -171,9 +171,8 @@ def start_bind(db_session, aid: int) -> dict:
     t.start()
     return {"status": "pending"}
 
-
 def _bind_worker(aid: int):
-    from ..database import SessionLocal
+    from ..database import SessionLocal  # 线程内独立会话
 
     with SessionLocal() as s:
         try:
@@ -188,7 +187,14 @@ def _bind_worker(aid: int):
 # ---------------- 采集 ----------------
 
 def run_with_profile(aid: int, cmd: list[str], timeout: int = 300, headless: bool = False, goto_creator: bool = True) -> str:
-    """以指定账号的独立 profile 执行 opencli 命令（身份=该账号）。"""
+    """以指定账号的独立 profile 执行 opencli 命令（身份=该账号）。
+
+    - 启动该账号 profile 的 Chrome（带 CDP 调试端口）
+    - 注入 OPENCLI_CDP_ENDPOINT，opencli 命令定向到该 profile 执行
+    - 结束后关闭 Chrome，返回命令 stdout
+    headless=False：真实窗口（发布/上传等需要页面交互的操作）；
+    headless=True：静默（只读采集类）。
+    """
     from playwright.sync_api import sync_playwright
 
     from ..database import SessionLocal
@@ -227,13 +233,12 @@ def run_with_profile(aid: int, cmd: list[str], timeout: int = 300, headless: boo
         raise RuntimeError(f"opencli 执行失败（{' '.join(cmd[:3])}）：{proc.stderr[:300] or proc.stdout[:300]}")
     return proc.stdout
 
-
 def _profile_port(aid: int) -> int:
+    """每账号固定调试端口，避免冲突（10000 + aid）。"""
     return 10000 + (aid % 5000)
 
-
 def collect_profile_sync(db_session, aid: int, limit: int = 20) -> dict:
-    """加载账号独立 profile → opencli douyin 以该账号身份采集 → 按作品 ID 对齐落库。"""
+    """加载账号独立 profile（带 CDP 调试端口）→ opencli douyin 以该账号身份采集 → 按作品 ID 对齐落库。"""
     from playwright.sync_api import sync_playwright
 
     account = db_session.get(Account, aid)
@@ -258,6 +263,7 @@ def collect_profile_sync(db_session, aid: int, limit: int = 20) -> dict:
             page.wait_for_selector("text=/内容管理|作品管理|数据概览|登录/", timeout=25000)
         except Exception:
             pass
+        # 等待 CDP 就绪，然后 opencli 以该账号身份采集
         time.sleep(2)
         env = dict(os.environ)
         env["OPENCLI_CDP_ENDPOINT"] = f"http://127.0.0.1:{port}"
@@ -271,8 +277,8 @@ def collect_profile_sync(db_session, aid: int, limit: int = 20) -> dict:
     created, merged = persist_works(db_session, account, works)
     return {"pulled": len(works), "created": created, "merged": merged}
 
-
 def _parse_opencli_videos(stdout: str, limit: int) -> list[dict]:
+    """解析 opencli douyin videos 输出（兼容 list / {videos:[]} / {items:[]}）。"""
     import json as _json
 
     try:
@@ -297,6 +303,50 @@ def _parse_opencli_videos(stdout: str, limit: int) -> list[dict]:
         }
     return list(out.values())[:limit]
 
+def _extract_dom_items(page) -> list[dict]:
+    """DOM 兜底：作品管理列表卡片行（封面标题/播放/点赞/评论）。"""
+    items = []
+    try:
+        rows = page.locator("div[class*=card], tr[class*=row], [class*=works] a").all()
+        # 保守：抓页面文本找数字模式；主通道仍以 XHR 为准
+        txt = page.locator("body").inner_text(timeout=3000)
+        for m in re.finditer(r"([^\n]{4,60})\n([\d.万]+)[^0-9]*([\d.万]+)", txt):
+            pass
+    except Exception:
+        pass
+    return items
+
+def _normalize_works(xhr_batches: list, dom_items: list, limit: int) -> list[dict]:
+    """从 XHR 载荷里挖作品列表（兼容多种返回结构），按作品 ID 去重对齐。"""
+    out: dict[str, dict] = {}
+    for batch in xhr_batches:
+        for node in _walk(batch):
+            if isinstance(node, dict) and node.get("aweme_id") and isinstance(node.get("aweme_id"), str):
+                v = node
+                out[v["aweme_id"]] = {
+                    "item_id": v["aweme_id"],
+                    "title": v.get("desc") or v.get("title") or "",
+                    "cover": (v.get("video") or {}).get("cover", {}).get("url_list", [""])[0] if isinstance(v.get("video"), dict) else "",
+                    "view": _num(v.get("statistics", {}).get("play_count")) if isinstance(v.get("statistics"), dict) else 0,
+                    "like": _num(v.get("statistics", {}).get("digg_count")) if isinstance(v.get("statistics"), dict) else 0,
+                    "comment": _num(v.get("statistics", {}).get("comment_count")) if isinstance(v.get("statistics"), dict) else 0,
+                    "share": _num(v.get("statistics", {}).get("share_count")) if isinstance(v.get("statistics"), dict) else 0,
+                    "collect": _num(v.get("statistics", {}).get("collect_count")) if isinstance(v.get("statistics"), dict) else 0,
+                }
+    # DOM 兜底合并（有 item_id 才认）
+    for it in dom_items:
+        if it.get("item_id") and it["item_id"] not in out:
+            out[it["item_id"]] = it
+    return list(out.values())[:limit]
+
+def _walk(o):
+    if isinstance(o, dict):
+        yield o
+        for v in o.values():
+            yield from _walk(v)
+    elif isinstance(o, list):
+        for v in o:
+            yield from _walk(v)
 
 def _num(x) -> float:
     try:
@@ -304,9 +354,8 @@ def _num(x) -> float:
     except Exception:
         return 0.0
 
-
 def persist_works(db_session, account: Account, works: list[dict]) -> tuple[int, int]:
-    """按作品 ID 幂等落库：已存在 → 合并（补真实数据）；不存在 → 新建。"""
+    """按作品 ID 幂等落库：已存在 → 合并（补真实数据，不覆盖手写内容）；不存在 → 新建 imported。"""
     created = merged = 0
     for w in works:
         item_id = str(w.get("item_id", ""))
@@ -314,6 +363,7 @@ def persist_works(db_session, account: Account, works: list[dict]) -> tuple[int,
             continue
         pub = db_session.query(Publication).filter(Publication.account_id == account.id, Publication.item_id == item_id).first()
         if pub:
+            # 合并：只补缺失字段
             if not pub.title and w.get("title"):
                 pub.title = str(w["title"])[:256]
             if not pub.cover_url and w.get("cover"):
@@ -330,6 +380,7 @@ def persist_works(db_session, account: Account, works: list[dict]) -> tuple[int,
             db_session.add(pub)
             created += 1
         db_session.flush()
+        # 指标快照
         db_session.add(Metric(
             account_id=account.id,
             publication_id=pub.id,
@@ -345,7 +396,6 @@ def persist_works(db_session, account: Account, works: list[dict]) -> tuple[int,
     account.last_synced_at = datetime.now()
     return created, merged
 
-
 def start_collect(db_session, aid: int, limit: int = 20) -> dict:
     """异步启动采集。"""
     account = db_session.get(Account, aid)
@@ -356,7 +406,6 @@ def start_collect(db_session, aid: int, limit: int = 20) -> dict:
     t = threading.Thread(target=_collect_worker, args=(aid, limit), daemon=True)
     t.start()
     return {"status": "collecting"}
-
 
 def _collect_worker(aid: int, limit: int):
     from ..database import SessionLocal

@@ -416,7 +416,6 @@ async def run_scheduled_tasks() -> None:
             logger.error("调度循环错误：%s", e)
         await asyncio.sleep(60)
 
-
 def seed_default_rules(db: Session) -> None:
     """预置对标 6 任务（幂等：已存在同名任务则跳过；旧规则按 task_type 迁移）。"""
     # 旧规则 → 新任务类型映射
@@ -465,7 +464,6 @@ def seed_default_rules(db: Session) -> None:
         )
     db.commit()
 
-
 def seed_account_rules(db: Session, account_id: int | None) -> None:
     """为指定账号补齐一套默认规则（幂等：该账号已有某 task_type 则跳过）。
 
@@ -513,12 +511,10 @@ def seed_account_rules(db: Session, account_id: int | None) -> None:
         )
     db.commit()
 
-
 def _has_ai_key() -> bool:
     from ..config import settings
 
     return bool(settings.ark_api_key)
-
 
 def ensure_next_runs(db: Session) -> None:
     """启动时补齐 next_run（未启用的任务下次标为等待启用）。"""
