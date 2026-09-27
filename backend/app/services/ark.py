@@ -1,4 +1,4 @@
-"""火山方舟 LLM 调用服务：对话、结构化 JSON 输出。"""
+"""火山方舟 LLM 调用服务：对话、结构化 JSON 输出、带定位约束的通用调用。"""
 import json
 import re
 
@@ -9,7 +9,6 @@ from ..config import settings
 
 class ArkError(Exception):
     pass
-
 
 def _extract_json(text: str) -> dict:
     """优先 json.loads，失败时提取首个 ```json 块或 {} 块。"""
@@ -31,7 +30,6 @@ def _extract_json(text: str) -> dict:
         except json.JSONDecodeError:
             raise ArkError(f"模型未返回合法 JSON: {text[:200]}")
     raise ArkError(f"模型未返回 JSON: {text[:200]}")
-
 
 async def chat(
     messages: list[dict],
@@ -64,7 +62,6 @@ async def chat(
         raise ArkError(f"方舟 API 错误 {e.response.status_code}: {e.response.text[:200]}")
     except httpx.TimeoutException:
         raise ArkError("方舟 API 超时")
-
 
 async def chat_json(
     messages: list[dict],

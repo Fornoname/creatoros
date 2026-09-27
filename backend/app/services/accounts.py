@@ -12,7 +12,6 @@ from . import publish as publish_svc
 
 logger = logging.getLogger("creatoros.accounts")
 
-
 def resolve_account(db: Session, account_id: int | None = None) -> int:
     """返回指定账号或默认账号 id。"""
     if account_id:
@@ -22,7 +21,6 @@ def resolve_account(db: Session, account_id: int | None = None) -> int:
         return default.id
     first = db.query(Account).order_by(Account.id).first()
     return first.id if first else 1
-
 
 def account_stats(db: Session, account_id: int | None = None) -> dict:
     """单个账号聚合：作品/指标/项目/选题/公式/知识/素材。"""
@@ -53,7 +51,6 @@ def account_stats(db: Session, account_id: int | None = None) -> dict:
         "knowledge": db.query(Knowledge).filter(Knowledge.account_id == aid).count(),
         "materials": db.query(Material).filter(Material.account_id == aid).count(),
     }
-
 
 async def import_douyin_works(db: Session, account_id: int | None = None, limit: int = 10) -> dict:
     """导入账号历史作品：opencli douyin videos → Publication/Metric/Knowledge 资产化。"""

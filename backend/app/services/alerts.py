@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from ..models import Alert
 
-
 def push_alert(
     db: Session,
     account_id: int | None,
@@ -47,7 +46,6 @@ def push_alert(
     db.refresh(a)
     return a
 
-
 def list_alerts(db: Session, account_id: int | None, limit: int = 20, unread_only: bool = False):
     q = db.query(Alert)
     if account_id is not None:
@@ -57,13 +55,11 @@ def list_alerts(db: Session, account_id: int | None, limit: int = 20, unread_onl
     q = q.order_by(Alert.created_at.desc()).limit(limit)
     return q.all()
 
-
 def unread_count(db: Session, account_id: int | None) -> int:
     q = db.query(Alert)
     if account_id is not None:
         q = q.filter((Alert.account_id == account_id) | (Alert.account_id.is_(None)))
     return q.filter(Alert.read_at.is_(None)).count()
-
 
 def mark_read(db: Session, alert_id: int) -> Alert | None:
     a = db.get(Alert, alert_id)

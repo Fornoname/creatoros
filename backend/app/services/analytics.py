@@ -19,7 +19,6 @@ _STATS_MAP = {
     "favorite_count": "favorites",
 }
 
-
 def _run_stats(item_id: str) -> list[dict]:
     proc = subprocess.run(
         ["opencli", "douyin", "stats", item_id, "-f", "json"],
@@ -37,7 +36,6 @@ def _run_stats(item_id: str) -> list[dict]:
     if isinstance(data, dict) and data.get("ok") is False:
         raise RuntimeError(f"stats 不可用（可能非本账号作品）：{str(data.get('error'))[:150]}")
     return data
-
 
 def refresh_stats(db: Session, account_id: int | None, item_id: str) -> dict:
     """补采单个作品创作者中心深层指标，写入 Metric 快照。"""
@@ -107,7 +105,6 @@ def refresh_stats(db: Session, account_id: int | None, item_id: str) -> dict:
         },
     }
 
-
 def save_audience(
     db: Session,
     account_id: int | None,
@@ -147,7 +144,6 @@ def save_audience(
         "other": row.other,
         "source": row.source,
     }
-
 
 def serialize_audience(row: AudienceSource | None):
     if not row:

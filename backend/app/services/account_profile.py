@@ -17,7 +17,6 @@ def _top(items: list[str], n: int = 5) -> list[tuple[str, int]]:
     cnt = Counter(x for x in items if x)
     return cnt.most_common(n)
 
-
 def build_account_profile(db, account_id: int) -> str:
     """聚合该账号全部选题/项目的创作特征，输出注入提示词的画像文本。
 
@@ -72,7 +71,6 @@ def build_account_profile(db, account_id: int) -> str:
         lines.append(verified)
     return "\n".join(lines)
 
-
 def get_profile_text(db, account_id: int) -> str:
     """合并动态画像 + 用户编辑偏好，返回最终注入文本。"""
     dynamic = build_account_profile(db, account_id)
@@ -88,7 +86,6 @@ def get_profile_text(db, account_id: int) -> str:
             extra = f"用户补充偏好（最高优先级，必须遵守）：\n{notes}"
     parts = [p for p in (dynamic, extra) if p]
     return "\n\n".join(parts)
-
 
 def save_profile_notes(db, account_id: int, notes: str) -> dict:
     """保存用户编辑的画像偏好（写入 accounts.profile JSON 的 notes 字段）。"""

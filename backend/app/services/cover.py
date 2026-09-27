@@ -15,7 +15,6 @@ COVER_DIR = MEDIA_DIR / "covers"
 class CoverError(Exception):
     pass
 
-
 def _font(size: int, bold: bool = False):
     """加载 macOS 苹方字体。"""
     candidates = [
@@ -30,12 +29,12 @@ def _font(size: int, bold: bool = False):
             continue
     return ImageFont.load_default()
 
-
 def generate_template_cover(prompt: str) -> str:
     """程序化竖版封面（1080x1920 深色 + 紫色点缀 + 居中标题），永不离线。"""
     COVER_DIR.mkdir(parents=True, exist_ok=True)
     W, H = 1080, 1920
 
+    # 垂直渐变背景
     top = (13, 13, 24)
     bottom = (34, 22, 64)
     img = Image.new("RGB", (W, H), top)
@@ -48,6 +47,7 @@ def generate_template_cover(prompt: str) -> str:
         for x in range(W):
             px[x, y] = (r, g, b)
 
+    # 紫色光晕
     glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     gd = ImageDraw.Draw(glow)
     gd.ellipse((W * 0.3, H * 0.05, W * 0.85, H * 0.45), fill=(124, 58, 237, 60))
@@ -57,10 +57,12 @@ def generate_template_cover(prompt: str) -> str:
 
     draw = ImageDraw.Draw(img)
 
+    # 顶部标识
     badge_font = _font(40, bold=True)
     draw.text((70, 100), "CreatorOS", fill=(165, 128, 255, 255), font=badge_font)
     draw.text((70, 165), "AI 编导工作台", fill=(170, 170, 190, 255), font=_font(30))
 
+    # 主标题（截断 + 自动换行，最多 6 行）
     title_text = prompt.replace("\n", " ").strip() or "新作发布"
     if len(title_text) > 36:
         title_text = title_text[:36] + "…"
@@ -77,13 +79,13 @@ def generate_template_cover(prompt: str) -> str:
         draw.text((x, y), line, fill=(245, 245, 250, 255), font=title_font)
         y += line_h
 
+    # 底部提示
     draw.text((70, H - 160), "· 竖版 9:16 ·", fill=(130, 130, 155, 255), font=_font(34))
 
     fname = f"cover_tpl_{uuid.uuid4().hex[:12]}.png"
     path = COVER_DIR / fname
     img.save(path, "PNG")
     return f"/media/covers/{fname}"
-
 
 async def generate_cover(prompt: str, size: str = "1024x1024") -> str:
     """生成封面图，下载到本地 media/covers/，返回可访问 URL。
@@ -96,7 +98,11 @@ async def generate_cover(prompt: str, size: str = "1024x1024") -> str:
     last_err = ""
     async with httpx.AsyncClient(timeout=180) as client:
         for model in models:
-            payload = {"model": model, "prompt": prompt[:1500], "size": size}
+            payload = {
+                "model": model,
+                "prompt": prompt[:1500],
+                "size": size,
+            }
             try:
                 r = await client.post(
                     url,

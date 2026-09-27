@@ -3,7 +3,6 @@ from ..config import settings
 from ..models import PositionMaster
 from .ark import chat
 
-
 def load_position_text(db, account_id: int | None = None) -> str:
     if account_id:
         master = db.query(PositionMaster).filter(PositionMaster.is_active.is_(True), PositionMaster.account_id == account_id).first()
@@ -13,7 +12,6 @@ def load_position_text(db, account_id: int | None = None) -> str:
         return "（尚未配置定位母版，请先到定位中心完成定位）"
     from .position import master_to_text
     return master_to_text(master)
-
 
 def build_system_prompt(position_text: str, context_info: str) -> str:
     return f"""你是「CreatorOS」的编导智能体，服务于一位短视频内容创作者。
