@@ -32,6 +32,7 @@ def _parse_publish_time(v) -> datetime | None:
         return None
 
 
+
 def _upsert_snapshot(db, content_id: int, pc: int, dc: int, cc: int, sc: int, colc: int) -> None:
     """把雷达内容当前计数幂等写入当日快照（同 content+date 更新）。"""
     from ..models import RadarSnapshot
@@ -74,6 +75,7 @@ def _run_opencli(args: list[str], timeout: int = 120) -> list[dict] | dict:
     try:
         return json.loads(out)
     except json.JSONDecodeError:
+        # opencli 错误对象可能是 yaml/带 AutoFix 提示
         if '"ok": false' in out or "ok: false" in out:
             raise RuntimeError(f"opencli 执行失败：{out[:300]}")
         raise RuntimeError(f"opencli 输出无法解析：{out[:300]}")
@@ -97,6 +99,7 @@ def _resolve_sec_uid(raw: str) -> str:
     m = re.search(r"[?&]sec_uid=([A-Za-z0-9_\-]+)", raw)
     if m:
         return m.group(1)
+    # 短链 HEAD 解链后再提取
     try:
         import urllib.request
         req = urllib.request.Request(raw, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
@@ -123,6 +126,7 @@ def sync_user_source(db: Session, account_id: int | None, source_id: int) -> dic
         raise ValueError(
             "缺少博主主页链接：请在「抖音主页链接」填入 https://www.douyin.com/user/<sec_uid> 或分享主页短链（v.douyin.com/…）"
         )
+    # 评论正文不采集（对标副标题），跳过评论拉取以避开 Detached 并加快同步
     data = _run_opencli(["douyin", "user-videos", sec_uid, "--with_comments", "false"])
     items = data if isinstance(data, list) else data.get("videos") or data.get("data") or data.get("items") or []
     added = 0
@@ -137,10 +141,12 @@ def sync_user_source(db: Session, account_id: int | None, source_id: int) -> dic
             .first()
         )
         if exists:
+            # 重加同博主时：把无主（被删源解绑）内容认领回当前信源，避免去重冲突
             if exists.source_id is None or exists.source_id != src.id:
                 exists.source_id = src.id
             if url and not exists.video_url:
                 exists.video_url = url
+            # 每次同步都用最新公开计数刷新（max 幂等累加）
             exists.play_count = max(exists.play_count, int(it.get("play_count") or it.get("plays") or 0))
             exists.digg_count = max(exists.digg_count, int(it.get("digg_count") or it.get("likes") or 0))
             exists.comment_count = max(exists.comment_count, int(it.get("comment_count") or it.get("comments") or 0))
@@ -214,6 +220,7 @@ def sync_search(db: Session, account_id: int | None, keyword: str, limit: int = 
 
 
 def _asr_env() -> str:
+    """faster-whisper 独立环境路径（py3.12，py3.14 无 av wheel）。"""
     import os
     cands = ["/tmp/asr_env/bin/python", os.path.expanduser("~/.asr_env/bin/python")]
     for c in cands:
@@ -246,6 +253,7 @@ async def _ark_transcribe_segment(b64: str) -> str:
     async with httpx.AsyncClient(timeout=300) as client:
         r = await client.post(url, json=payload, headers=headers)
     if r.status_code == 429:
+        # 账号级用量限额（SetLimitExceeded）：退避一次后仍限流则交由调用方降级本地
         import asyncio
         await asyncio.sleep(3)
         async with httpx.AsyncClient(timeout=300) as client:
@@ -361,6 +369,7 @@ async def _extract_subtitle_inner(db: Session, c: RadarContent) -> RadarContent:
         try:
             _download(c.video_url, mp4)
         except RuntimeError:
+            # 抖音签名直链有时效：按信源重拉最新列表刷新该作品直链后重试
             src = db.get(SourceAccount, c.source_id) if c.source_id else None
             refreshed = ""
             if src and src.sec_uid:
@@ -405,7 +414,7 @@ async def _extract_subtitle_inner(db: Session, c: RadarContent) -> RadarContent:
 
 
 async def rewrite_transcript(db: Session, account_id: int | None, content_id: int) -> RadarContent:
-    """AI 改写：基于原字幕改写为更精炼的口播/文案稿。"""
+    """AI 改写：基于原字幕改写为更精炼的口播/文案稿（原字幕保留，改写稿存 transcript_ai）。"""
     aid = accounts_svc.resolve_account(db, account_id)
     c = db.get(RadarContent, content_id)
     if not c or c.account_id != aid:
@@ -461,7 +470,7 @@ async def transcribe(db: Session, account_id: int | None, content_id: int) -> Ra
 
 
 async def draft_topic(db: Session, account_id: int | None, content_id: int) -> dict:
-    """生成选题候选（不写库，确认后才写入）。"""
+    """生成选题候选（对标「生成选题候选」：结合当前账号定位生成可编辑模板，不写库，确认后才写入）。"""
     aid = accounts_svc.resolve_account(db, account_id)
     c = db.get(RadarContent, content_id)
     if not c or c.account_id != aid:
@@ -531,7 +540,8 @@ def adopt_topic(db: Session, account_id: int | None, content_id: int, draft: dic
 
 
 async def auto_breakdown(db: Session, real_limit: int = 2, draft_limit: int = 3) -> dict:
-    """自动拆解：最新未转写内容优先真实原字幕转写，失败/无直链回退 AI 草稿。"""
+    """自动拆解：最新未转写内容优先做真实原字幕转写（extract_subtitle），
+    失败/无直链的内容回退 AI 基于公开描述生成的逐字稿草稿。"""
     real_done = draft_done = 0
     pending = (
         db.query(RadarContent)
@@ -540,6 +550,7 @@ async def auto_breakdown(db: Session, real_limit: int = 2, draft_limit: int = 3)
         .limit(real_limit + draft_limit)
         .all()
     )
+    # 阶段 1：真实原字幕转写（有视频直链的最新内容，串行防打爆方舟）
     for c in pending[:real_limit]:
         if c.transcript_status == "ready" or not c.video_url:
             continue
@@ -552,6 +563,7 @@ async def auto_breakdown(db: Session, real_limit: int = 2, draft_limit: int = 3)
             logger.warning("预转写失败 content_id=%s: %s", c.id, str(e)[:200])
             db.rollback()
             continue
+    # 阶段 2：草稿兜底（仍未 ready 的）
     for c in pending:
         if c.transcript_status == "ready":
             continue
@@ -578,10 +590,11 @@ async def auto_breakdown(db: Session, real_limit: int = 2, draft_limit: int = 3)
 
 
 def parse_share_link(db: Session, account_id: int | None, url: str) -> dict:
-    """粘贴分享链接收录。"""
+    """粘贴分享链接收录：解析出作品直链/aweme_id，尝试用 opencli 拉取详情。"""
     aid = accounts_svc.resolve_account(db, account_id)
     if not url.strip():
         raise ValueError("链接不能为空")
+    # 尝试解析短链得到真实地址
     resolved = url.strip()
     try:
         import urllib.request
@@ -596,6 +609,7 @@ def parse_share_link(db: Session, account_id: int | None, url: str) -> dict:
     exists = db.query(RadarContent).filter(RadarContent.account_id == aid, RadarContent.aweme_id == aweme).first()
     if exists:
         return {"content": {"id": exists.id, "aweme_id": aweme, "title": exists.title}, "added": False}
+    # 用 opencli stats 拉该作品公开计数
     try:
         data = _run_opencli(["douyin", "stats", aweme], timeout=60)
         item = data if isinstance(data, dict) else (data[0] if data else {})
