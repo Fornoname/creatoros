@@ -115,6 +115,7 @@ def add_source(payload: SourceCreate, db: Session = Depends(get_db), account_id:
     db.add(s)
     db.commit()
     db.refresh(s)
+    # 提供 sec_uid 则立即同步
     result = None
     if payload.sec_uid:
         try:
@@ -123,8 +124,15 @@ def add_source(payload: SourceCreate, db: Session = Depends(get_db), account_id:
             s.sync_status = "error"
             db.commit()
             from ..services import alerts as alerts_svc
+
             alerts_svc.push_alert(
-                db, aid, "error", f"信源博主「{s.name}」同步失败", str(e), source_type="radar_sync", source_id=s.id,
+                db,
+                aid,
+                "error",
+                f"信源博主「{s.name}」同步失败",
+                str(e),
+                source_type="radar_sync",
+                source_id=s.id,
             )
             result = {"error": str(e)}
     return {"source": _serialize_source(s), "sync": result}
@@ -177,8 +185,15 @@ def sync_source(source_id: int, db: Session = Depends(get_db), account_id: int |
             s.sync_status = "error"
             db.commit()
             from ..services import alerts as alerts_svc
+
             alerts_svc.push_alert(
-                db, aid, "error", f"信源博主「{s.name}」同步失败", str(e), source_type="radar_sync", source_id=s.id,
+                db,
+                aid,
+                "error",
+                f"信源博主「{s.name}」同步失败",
+                str(e),
+                source_type="radar_sync",
+                source_id=s.id,
             )
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -287,6 +302,7 @@ def patch_content(content_id: int, payload: ContentPatch, db: Session = Depends(
     return {"content": _serialize_content(c)}
 
 
+
 @router.post("/contents/{content_id}/to-knowledge")
 async def content_to_knowledge(content_id: int, db: Session = Depends(get_db), account_id: int | None = Query(None)):
     """雷达作品一键入库知识库：source=video，带来源链接，正文=描述+逐字稿。"""
@@ -329,7 +345,6 @@ async def content_to_knowledge(content_id: int, db: Session = Depends(get_db), a
     db.commit()
     return {"ok": True, "knowledge": {"id": k.id, "title": k.title}, "duplicated": False}
 
-
 @router.post("/contents/{content_id}/extract-subtitle")
 async def extract_subtitle(content_id: int, db: Session = Depends(get_db), account_id: int | None = Query(None)):
     aid = accounts_svc.resolve_account(db, account_id)
@@ -369,7 +384,6 @@ def upgrade(content_id: int, db: Session = Depends(get_db), account_id: int | No
         return radar_svc.upgrade(db, aid, content_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
 
 # ---------- 分类（对标「新建分类」） ----------
 
