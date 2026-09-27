@@ -3,7 +3,6 @@ from ..config import settings
 from ..models import Project
 from .ark import chat_json
 
-
 async def predict_performance(project: Project, position_text: str, script_text: str = "") -> dict:
     """发布前预测：预估播放量级、完播率与理由，构成校准飞轮。"""
     prompt = f"""你是短视频数据顾问。基于选题与脚本，预测这条内容发布后的表现。
@@ -24,7 +23,6 @@ async def predict_performance(project: Project, position_text: str, script_text:
 }}
 播放量给出期望值（非区间数字），完播率为 0-1 小数。"""
     return await chat_json([{"role": "user", "content": prompt}], model=settings.ark_model_pro)
-
 
 async def review_project(project: Project, metrics_text: str, comments_text: str, position_text: str) -> dict:
     """AI 复盘：综合指标与评论做归因，产出可采纳沉淀。"""
@@ -50,7 +48,6 @@ async def review_project(project: Project, metrics_text: str, comments_text: str
   "adoptable": ["本期可采纳沉淀为公式的要点（每条一句话，可执行）"]
 }}"""
     return await chat_json([{"role": "user", "content": prompt}], model=settings.ark_model_pro)
-
 
 async def generate_formula_candidates(reviews_summary: str, top_videos: str, position_text: str) -> list[dict]:
     """从复盘结论与爆款数据提炼「可复用公式」候选（带证据）。"""

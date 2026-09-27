@@ -3,12 +3,12 @@ from ..config import settings
 from ..models import Project, Topic
 from .ark import chat_json
 
-
 async def build_skeleton(project: Project, materials_text: str, position_text: str, knowledge: str = "", formulas_text: str = "") -> dict:
-    """生成论点骨架：核心论点 + 支撑论据 + 反驳 + 反差，并挂素材。"""
+    """生成论点骨架：核心论点 + 支撑论据 + 反驳 + 反差，并挂素材。
+    knowledge：向量检索注入的相关知识（RAG，阶段 26）；formulas_text：已采纳复盘公式（阶段 29 回流）。"""
     topic = None
     if project.topic_id:
-        topic = db_get_topic(project)
+        topic = db_get_topic(project)  # 由路由传入 topic
     topic_text = ""
     if topic:
         topic_text = (
@@ -48,9 +48,9 @@ async def build_skeleton(project: Project, materials_text: str, position_text: s
 }}"""
     return await chat_json([{"role": "user", "content": prompt}], model=settings.ark_model_pro)
 
-
 async def generate_script(skeleton: dict, position_text: str, duration_hint: str = "60-90秒", knowledge: str = "", formulas_text: str = "") -> str:
-    """基于论点骨架生成短视频口播脚本（Hook → 论点展开 → CTA）。"""
+    """基于论点骨架生成短视频口播脚本（Hook → 论点展开 → CTA）。
+    knowledge：向量检索注入的相关知识（RAG，阶段 26）；formulas_text：已采纳复盘公式（阶段 29 回流）。"""
     import json
     skeleton_text = json.dumps(skeleton, ensure_ascii=False, indent=1)
     knowledge_block = ""
@@ -79,7 +79,6 @@ async def generate_script(skeleton: dict, position_text: str, duration_hint: str
 {skeleton_text}"""
     from .ark import chat
     return await chat([{"role": "user", "content": prompt}], model=settings.ark_model_pro)
-
 
 def db_get_topic(project: Project):
     from ..database import SessionLocal

@@ -22,18 +22,20 @@ MEETING_MODES = {
     "manual": "手动论智",
 }
 
-
 def _position_text_of(db, master_id: int | None) -> str:
     from .position import master_to_text
     if master_id:
-        master = db.get(PositionMaster, master_id)
+        master = db.get(PositionMaster, master_id)  # type: ignore
         if master:
             return master_to_text(master)
     return "（尚未配置定位母版，按通用短视频内容创作者处理）"
 
-
 def build_verified_signals(db, account_id: int, min_views: float = 10000, min_likes: float = 500) -> str:
-    """反馈闭环：从已发布且有真实指标的项目聚合「已验证爆款特征」。"""
+    """反馈闭环：从已发布且有真实指标的项目聚合「已验证爆款特征」。
+
+    判定：播放≥min_views 或 点赞≥min_likes 记为已验证爆款；有数据但未达标记为验证中。
+    输出注入提示词的文本；无可用数据返回空串。
+    """
     from ..models import Project
 
     projects = db.query(Project).filter(Project.account_id == account_id).all()
@@ -71,9 +73,12 @@ def build_verified_signals(db, account_id: int, min_views: float = 10000, min_li
         blocks.append("本账号已发布但数据一般的作品（避免重蹈覆辙）：\n" + "\n".join(f"- {x}" for x in learning))
     return "\n\n".join(blocks)
 
-
 async def ai_meeting(mode: str, signals: str, position_text: str, formulas: str = "", knowledge: str = "", verified: str = "", profile: str = "") -> list[dict]:
-    """AI 选题会：按出路类型生成选题卡。"""
+    """AI 选题会：按出路类型生成选题卡（含受众/形式/痛点/决定/Hook/难度）。
+    formulas：已采纳的可复用公式（阶段 3 沉淀反哺）。
+    knowledge：向量检索注入的相关知识条目（RAG，阶段 26）。
+    verified：反馈闭环注入——本账号已验证爆款/一般作品特征（越用越懂账号）。
+    profile：账号创作画像注入——本账号历史创作风格指纹（越用越懂账号）。"""
     formula_block = ""
     if formulas:
         formula_block = f"""
@@ -110,9 +115,8 @@ async def ai_meeting(mode: str, signals: str, position_text: str, formulas: str 
 ]}} 最多 3 个，只给最有价值的。"""
     return (await chat_json([{"role": "user", "content": prompt}], model=settings.ark_model_lite, max_tokens=2048)).get("topics", [])
 
-
 async def complete_topic(topic: Topic, position_text: str) -> dict:
-    """AI 补全选题卡。"""
+    """AI 补全选题卡：完善受众/痛点/决定/Hook/形式/难度，并优化标题。"""
     prompt = f"""补全以下选题卡，使其达到可直接立项的完整度。
 要求：观点明确、痛点真实、Hook 有悬念或反常识；难度按制作工作量判断。
 

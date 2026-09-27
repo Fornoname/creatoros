@@ -3,7 +3,6 @@ from ..config import settings
 from ..models import PositionMaster, PositionRule
 from .ark import chat_json
 
-
 def master_to_text(m: PositionMaster) -> str:
     """把定位母版转成注入下游的约束文本。"""
     parts = [
@@ -26,7 +25,6 @@ def master_to_text(m: PositionMaster) -> str:
         parts.append("定位规则：" + "；".join(rules))
     return "\n".join(parts)
 
-
 async def interview_position(qa_pairs: list[dict]) -> dict:
     """基于访谈问答生成定位母版字段草案。qa_pairs: [{q, a}]"""
     conv = "\n".join(f"问：{p['q']}\n答：{p['a']}" for p in qa_pairs)
@@ -48,7 +46,6 @@ async def interview_position(qa_pairs: list[dict]) -> dict:
   "capability_boundary": "能力边界（当前不碰的领域）"
 }}"""
     return await chat_json([{"role": "user", "content": prompt}], model=settings.ark_model_pro)
-
 
 async def generate_rules(master: PositionMaster) -> list[dict]:
     """从定位母版生成四类定位规则（选题规划/审稿规则/项目规划/禁止事项）。"""
