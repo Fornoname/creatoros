@@ -240,6 +240,7 @@ def project_metrics(project_id: int, db: Session = Depends(get_db)):
     )
     if not ms:
         return {"project_id": project_id, "metrics": None}
+    # 取最新一次采集（按 item 去重后取最新），再聚合
     latest_by_item: dict = {}
     for m in ms:
         if m.item_id not in latest_by_item:
