@@ -349,7 +349,7 @@ export interface PlatformStatus {
   platform: string
   label: string
   logged_in: boolean
-  logged_in: boolean
+  username: string
   bound: boolean
 }
 
