@@ -33,6 +33,7 @@ def _parse_publish_time(v) -> datetime | None:
 
 
 
+
 def _upsert_snapshot(db, content_id: int, pc: int, dc: int, cc: int, sc: int, colc: int) -> None:
     """把雷达内容当前计数幂等写入当日快照（同 content+date 更新）。"""
     from ..models import RadarSnapshot
@@ -112,7 +113,6 @@ def _resolve_sec_uid(raw: str) -> str:
         pass
     return ""
 
-
 def sync_user_source(db: Session, account_id: int | None, source_id: int) -> dict:
     """同步博主主页作品（user-videos，含封面/下载地址/评论）。"""
     aid = accounts_svc.resolve_account(db, account_id)
@@ -186,7 +186,6 @@ def sync_user_source(db: Session, account_id: int | None, source_id: int) -> dic
     total = db.query(RadarContent).filter(RadarContent.source_id == src.id).count()
     return {"source_id": src.id, "added": added, "total": total}
 
-
 def sync_search(db: Session, account_id: int | None, keyword: str, limit: int = 10) -> dict:
     """关键词搜索收录公开作品（search，字段较简）。"""
     aid = accounts_svc.resolve_account(db, account_id)
@@ -217,7 +216,6 @@ def sync_search(db: Session, account_id: int | None, keyword: str, limit: int = 
         added += 1
     db.commit()
     return {"keyword": keyword, "added": added}
-
 
 def _asr_env() -> str:
     """faster-whisper 独立环境路径（py3.12，py3.14 无 av wheel）。"""
@@ -296,7 +294,6 @@ async def _transcribe_with_ark(wav: str) -> str:
 
     parts = await asyncio.gather(*(one(p) for p in segs))
     return "\n".join(part.strip() for part in parts if part.strip())
-
 
 def _transcribe_with_faster_whisper(wav: str) -> str:
     """兜底：faster-whisper 本地转写。"""
@@ -510,7 +507,6 @@ async def draft_topic(db: Session, account_id: int | None, content_id: int) -> d
     draft.setdefault("difficulty", "medium")
     return {"draft": draft}
 
-
 def adopt_topic(db: Session, account_id: int | None, content_id: int, draft: dict) -> dict:
     """确认写入选题（对标「转为我的选题」确认步骤）。"""
     aid = accounts_svc.resolve_account(db, account_id)
@@ -588,7 +584,6 @@ async def auto_breakdown(db: Session, real_limit: int = 2, draft_limit: int = 3)
     db.commit()
     return {"real": real_done, "draft": draft_done}
 
-
 def parse_share_link(db: Session, account_id: int | None, url: str) -> dict:
     """粘贴分享链接收录：解析出作品直链/aweme_id，尝试用 opencli 拉取详情。"""
     aid = accounts_svc.resolve_account(db, account_id)
@@ -635,7 +630,6 @@ def parse_share_link(db: Session, account_id: int | None, url: str) -> dict:
     db.commit()
     db.refresh(c)
     return {"content": {"id": c.id, "aweme_id": aweme, "title": c.title}, "added": True}
-
 
 def upgrade(db: Session, account_id: int | None, content_id: int) -> dict:
     """升级为项目：建已立项选题 + 项目草稿（preparing）。"""
