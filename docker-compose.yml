@@ -1,0 +1,25 @@
+# CreatorOS 基础设施（阶段 2 起启用）
+# 阶段 0 使用 SQLite 起步（backend/app/config.py 的 database_url），
+# 切 PostgreSQL 时：安装 Docker 后执行 docker compose up -d，并把
+# backend/.env 的 DATABASE_URL 改为 postgresql+psycopg://creator:creator@localhost:5432/creatoros
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: creatoros-postgres
+    environment:
+      POSTGRES_USER: creator
+      POSTGRES_PASSWORD: creator
+      POSTGRES_DB: creatoros
+    ports:
+      - "5432:5432"
+    volumes:
+      - creatoros-pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: creatoros-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  creatoros-pgdata:

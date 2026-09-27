@@ -1,0 +1,37 @@
+# 环境变量与密钥（绝不上传）
+.env
+.env.*
+!.env.example
+
+# 数据库与业务数据
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+backend/creatoros.db*
+
+# 浏览器登录态（抖音 Cookie / 会话）
+backend/app/auth/
+
+# 用户素材
+backend/media/
+backend/uploads/
+
+# 前端依赖与构建
+node_modules/
+dist/
+*.local
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# 系统
+.DS_Store
+Thumbs.db
+nohup.out
+/tmp/
