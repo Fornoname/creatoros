@@ -1,4 +1,4 @@
-"""系统设置 API：方舟 API Key 配置面板。"""
+"""系统设置 API：方舟 API Key 配置面板（对应原系统 CLI/Codex 凭据签发入口）。"""
 import os
 from pathlib import Path
 
